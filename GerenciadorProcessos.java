@@ -7,6 +7,7 @@ public class GerenciadorProcessos extends Thread {
 
     private int proximoId = 1;
     private final List<ProcessControlBlock> filaProntos;
+    private final List<ProcessControlBlock> filaBloqueados;
     private ProcessControlBlock processoRodando;
     private final Object lock = new Object();
 
@@ -18,6 +19,7 @@ public class GerenciadorProcessos extends Thread {
     public GerenciadorProcessos(int tamMemoria, int tamPg, Sistema sistema) {
         this.sistema = sistema;
         this.filaProntos = sistema.sistemaOperacional.ready;
+        this.filaBloqueados = sistema.sistemaOperacional.block;
 
         int numFrames = (int) Math.ceil((double) tamMemoria / tamPg);
         GerenteMemoria.defineValores(numFrames, tamPg);
@@ -81,6 +83,7 @@ public class GerenciadorProcessos extends Thread {
                         ? "RUNNING"
                         : (filaProntos.contains(pcb) ? "READY" : "OUTRA");
                 System.out.println("ID: " + pcb.id + " Programa: " + pcb.nomePrograma + " Estado: " + pcb.estado + " Fila: " + fila + " Paginas: " + pcb.tabelaPaginas);
+                System.out.println("    PC: " + pcb.pc );
             }
         }
     }
@@ -173,8 +176,11 @@ public class GerenciadorProcessos extends Thread {
             pcb.estado = "EXECUTANDO";
         }
 
+        // Define context da CPU
         sistema.hardWare.cpu.setContext(pcb.pc, pcb.tabelaPaginas, pcb.registradores);
-        sistema.hardWare.cpu.run(sistema.sistemaOperacional.delta);
+
+        // Executa o que foi definido
+        sistema.hardWare.cpu.run(sistema.sistemaOperacional.delta, pcb.id);
 
         synchronized (lock) {
             //Verifica se o processo ainda existe, pois pode ter sido removido por interrupção
@@ -200,4 +206,24 @@ public class GerenciadorProcessos extends Thread {
             sistema.sistemaOperacional.running = null;
         }
     }
+
+    // Função que bloqueia o processo e aguarda IO dele  
+    public int funcaoQueBloqueiaProcessoEEsperaIO(int idProcesso){
+        
+        // Remove da fila de pronto
+        filaProntos.remove(idProcesso);
+
+
+        // Salva contexto
+        int [] registradoresSalvos = processoRodando.registradores;
+        int salvaPc = processoRodando.pc;
+        ArrayList<Integer> tabelaPaginasSalva = processoRodando.tabelaPaginas;
+        
+        // Adiciona na fila de bloqueados
+        filaBloqueados.add(processoRodando);
+
+        // Mandar a thread que verifica constantemente se há leitura  
+        return  0;
+    }
+
 }

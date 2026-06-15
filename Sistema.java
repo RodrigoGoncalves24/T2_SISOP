@@ -13,6 +13,7 @@ public class Sistema extends Thread{
     public static GerenteMemoria gm;
     public static Thread threadEscalonador;
     public static Sistema sistemaAtual;
+ 
 
     /// Atual alocação de memória no nosso programa
     public class Memory {
@@ -28,7 +29,7 @@ public class Sistema extends Thread{
     }
 
 
-    /// Comando terminal
+    /// Comando terminal - Thread concorrente com o escalonador, para o usuário interagir com o sistema
     public static void comandosTerminal() {
         System.out.println("[Thread Terminal: " + Thread.currentThread().getName() + "]");
         String comando = "";
@@ -161,11 +162,12 @@ public class Sistema extends Thread{
         JMPIGK, JMPILK, JMPIEK, JMPIGT,
         ADDI, SUBI, ADD, SUB, MULT, // matematicos
         LDI, LDD, STD, LDX, STX, MOVE, // movimentacao
-        SYSCALL, STOP // chamada de sistema e parada
+        SYSCALL, STOP, // chamada de sistema e parada
+        ADDIO
     }
 
     public enum Interrupts { // possiveis interrupcoes que esta CPU gera
-        noInterrupt, intEnderecoInvalido, intInstrucaoInvalida, intOverflow;
+        noInterrupt, intEnderecoInvalido, intInstrucaoInvalida, intOverflow, ;
     }
 
     public class CPU {
@@ -262,6 +264,8 @@ public class Sistema extends Thread{
             setContext(_pc, tabelaPaginas, null);
         }
 
+
+        //  Onde programa é executado - recebe programa a ser rodado
         public void setContext(int _pc, ArrayList<Integer> tabelaPaginas, int[] regs) {
             pc = _pc;
             tabelaPaginasProcessoAtual = tabelaPaginas;
@@ -294,12 +298,13 @@ public class Sistema extends Thread{
             this.debug = debug;
         }
 
-        public void run(int deltaInstrucoes) {
+        public void run(int deltaInstrucoes, int pc) {
             limiteInstrucoes = deltaInstrucoes;
-            run();
+            run(pc);
         }
 
-        public void run() { // execucao da CPU supoe que o contexto da CPU, vide acima,
+        // De fato executa o programa pelo tempo definido a cima
+        public void run(int idPC) { // execucao da CPU supoe que o contexto da CPU, vide acima,
             // esta devidamente setado
             cpuStop = false;
             instrucoesExecutadas = 0;
@@ -525,6 +530,27 @@ public class Sistema extends Thread{
                             stopPorStop = true;
                             cpuStop = true;
                             break;
+                        
+                        case ADDIO: // Opcode para esperar entrada e saida
+                                
+                            //Colocar na fila de bloqueado - tirando da fila de prontos e tirando da CPU
+                                // Salvar contexto atual
+                                // Mandar thread que verifica se há valor no arquivo
+                            //Mandar escalonador seguir adiante
+
+                        
+
+                            // Pega o endereço que queremos guardar o valor
+                            int parametro = registradores[instructionRegister.parametro];
+                            if(parametro == 1){
+                                int primeiroValorSoma = gp.funcaoQueBloqueiaProcessoEEsperaIO(idPC);
+                                registradores[instructionRegister.registradorA] = registradores[instructionRegister.registradorA] + primeiroValorSoma;
+
+                            }else{
+                                // escreve valor
+                            }
+                            
+                            pc++;
 
                         // Inexistente
                         default:
@@ -660,22 +686,23 @@ public class Sistema extends Thread{
                 dump(memoria[i]);
             }
         }
-        public void execProcesso(Word[] programa, ArrayList<Integer> tabelaPaginas, int pcInicial) {
-            System.out.println("---------------------------------- programa carregado na memoria");
-            hardWare.cpu.setContext(pcInicial, tabelaPaginas);
-            System.out.println("---------------------------------- inicia execucao");
-            hardWare.cpu.run();
-            System.out.println("---------------------------------- memoria apos execucao");
+        // Supondo que não chamado ninguem
+        // public void execProcesso(Word[] programa, ArrayList<Integer> tabelaPaginas, int pcInicial) {
+        //     System.out.println("---------------------------------- programa carregado na memoria");
+        //     hardWare.cpu.setContext(pcInicial, tabelaPaginas);
+        //     System.out.println("---------------------------------- inicia execucao");
+        //     hardWare.cpu.run();
+        //     System.out.println("---------------------------------- memoria apos execucao");
 
-            for (int i = 0; i < programa.length; i++) {
-                int pagina = i / tamPg;
-                int offset = i % tamPg;
-                int frame = tabelaPaginas.get(pagina);
-                int enderecoFisico = frame * tamPg + offset;
-                System.out.print(enderecoFisico + ":  ");
-                dump(hardWare.memoria.posicao[enderecoFisico]);
-            }
-        }
+        //     for (int i = 0; i < programa.length; i++) {
+        //         int pagina = i / tamPg;
+        //         int offset = i % tamPg;
+        //         int frame = tabelaPaginas.get(pagina);
+        //         int enderecoFisico = frame * tamPg + offset;
+        //         System.out.print(enderecoFisico + ":  ");
+        //         dump(hardWare.memoria.posicao[enderecoFisico]);
+        //     }
+        // }
     }
 
     public class SistemaOperacional {
@@ -684,6 +711,7 @@ public class Sistema extends Thread{
         public Utilities utils;
         public ProcessControlBlock running;
         public ArrayList<ProcessControlBlock> ready;
+        public ArrayList<ProcessControlBlock> block;
         public boolean escalonadorAtivo;
         public int delta;
 
@@ -694,6 +722,7 @@ public class Sistema extends Thread{
             utils = new Utilities(hardWare);
             running = null;
             ready = new ArrayList<>();
+            block = new ArrayList<>();
             escalonadorAtivo = true;
             delta = 5;
         }
@@ -738,6 +767,7 @@ public class Sistema extends Thread{
         comandosTerminal();
     }
 
+    // Thread para o escalonador rodar em background, usuário pode interagir com o sistema e os processos segue rodando
     private static void iniciarEscalonador() {
         if (threadEscalonador != null && threadEscalonador.isAlive()) {
             return;
