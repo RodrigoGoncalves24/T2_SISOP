@@ -43,7 +43,10 @@ public class GerenciadorProcessos extends Thread {
             ProcessControlBlock pcb = new ProcessControlBlock(proximoId, nomePrograma, programa, paginasAlocadas, "PRONTO");
             listaProcessBlock.put(proximoId, pcb);
             filaProntos.add(pcb);
-            System.out.println("Processo criado: " + pcb.id + " (" + nomePrograma + ")");
+            Log.registrar(
+                "Processo " + pcb.id +
+                " criado -> READY (" + nomePrograma + ")"
+            );
             proximoId++;
         }
         return true;
@@ -66,7 +69,10 @@ public class GerenciadorProcessos extends Thread {
             }
 
             listaProcessBlock.remove(id);
-            System.out.println("Processo removido: " + pcb.id);
+            Log.registrar(
+                "Processo " + pcb.id +
+                " removido do sistema"
+            );
         }
     }
 
@@ -174,6 +180,10 @@ public class GerenciadorProcessos extends Thread {
             processoRodando = pcb;
             sistema.sistemaOperacional.running = pcb;
             pcb.estado = "EXECUTANDO";
+            Log.registrar(
+                "Processo " + pcb.id +
+                " READY -> RUNNING"
+            );
         }
 
         // Define context da CPU
@@ -196,9 +206,16 @@ public class GerenciadorProcessos extends Thread {
             if (sistema.hardWare.cpu.parouPorStop()) {
                 gm.desaloca(pcb.tabelaPaginas);
                 listaProcessBlock.remove(pcb.id);
-                System.out.println("Processo finalizado e removido: " + pcb.id);
+                Log.registrar(
+                    "Processo " + pcb.id +
+                    " RUNNING -> TERMINATED"
+                );
             } else {
                 pcb.estado = "PRONTO";
+                Log.registrar(
+                    "Processo " + pcb.id +
+                    " RUNNING -> READY"
+                );
                 filaProntos.add(pcb);
             }
 
@@ -208,22 +225,38 @@ public class GerenciadorProcessos extends Thread {
     }
 
     // Função que bloqueia o processo e aguarda IO dele  
-    public int funcaoQueBloqueiaProcessoEEsperaIO(int idProcesso){
-        
-        // Remove da fila de pronto
-        filaProntos.remove(idProcesso);
+    public int funcaoQueBloqueiaProcessoEEsperaIO(int idProcesso) {
 
+        // Verifica se existe algum processo atualmente em execução.
+        // Se não houver, não há nada para bloquear.
+        if (processoRodando == null) {
+            return 0;
+        }
 
-        // Salva contexto
-        int [] registradoresSalvos = processoRodando.registradores;
-        int salvaPc = processoRodando.pc;
-        ArrayList<Integer> tabelaPaginasSalva = processoRodando.tabelaPaginas;
-        
-        // Adiciona na fila de bloqueados
+        // Registra no log que o processo solicitou uma operação de entrada/saída (IO).
+        Log.registrar(
+                "Processo " + processoRodando.id +
+                " solicitou IO"
+        );
+
+        // Altera o estado do processo para BLOQUEADO,
+        // indicando que ele ficará aguardando a conclusão da operação de IO.
+        processoRodando.estado = "BLOQUEADO";
+
+        // Registra a transição de estado do processo.
+        Log.registrar(
+                "Processo " + processoRodando.id +
+                " RUNNING -> BLOCKED"
+        );
+
+        // Move o processo para a fila de bloqueados.
+        // Ele permanecerá nessa fila até que o dispositivo de IO
+        // conclua a operação solicitada.
         filaBloqueados.add(processoRodando);
 
-        // Mandar a thread que verifica constantemente se há leitura  
-        return  0;
+        // Retorno temporário.
+        // Quando a implementação do dispositivo de IO estiver pronta,
+        // este método poderá retornar o valor lido ou o resultado da operação.
+        return 0;
     }
-
 }
