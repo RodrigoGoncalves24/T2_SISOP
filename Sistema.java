@@ -1,7 +1,7 @@
 import java.util.ArrayList;
 import java.util.Scanner;
 
-public class Sistema extends Thread{
+public class Sistema extends Thread {
 
     /// T1-A Criaçao das variaveis de Gerenciamento de memoria - tamMem e tamPg
     public static int tamMem;
@@ -13,7 +13,6 @@ public class Sistema extends Thread{
     public static GerenteMemoria gm;
     public static Thread threadEscalonador;
     public static Sistema sistemaAtual;
- 
 
     /// Atual alocação de memória no nosso programa
     public class Memory {
@@ -28,8 +27,8 @@ public class Sistema extends Thread{
         }
     }
 
-
-    /// Comando terminal - Thread concorrente com o escalonador, para o usuário interagir com o sistema
+    /// Comando terminal - Thread concorrente com o escalonador, para o usuário
+    /// interagir com o sistema
     public static void comandosTerminal() {
         System.out.println("[Thread Terminal: " + Thread.currentThread().getName() + "]");
         String comando = "";
@@ -111,7 +110,7 @@ public class Sistema extends Thread{
 
                     case "execall":
                         ExecutaTudoEscalonador executador = new ExecutaTudoEscalonador(gp);
-                        executador.start(); //roda em Thread separada
+                        executador.start(); // roda em Thread separada
                         break;
 
                     case "traceon":
@@ -139,6 +138,7 @@ public class Sistema extends Thread{
         in.close();
         System.out.println("Sistema encerrado.");
     }
+
     public class Word { // cada posicao da memoria tem uma instrucao (ou um dado)
         public Opcode opcode; // código de operação
         public int registradorA; // indice do primeiro registrador da operacao (Rs ou Rd cfe opcode na tabela)
@@ -167,7 +167,7 @@ public class Sistema extends Thread{
     }
 
     public enum Interrupts { // possiveis interrupcoes que esta CPU gera
-        noInterrupt, intEnderecoInvalido, intInstrucaoInvalida, intOverflow, ;
+        noInterrupt, intEnderecoInvalido, intInstrucaoInvalida, intOverflow,;
     }
 
     public class CPU {
@@ -260,12 +260,12 @@ public class Sistema extends Thread{
             ;
             return true;
         }
+
         public void setContext(int _pc, ArrayList<Integer> tabelaPaginas) {
             setContext(_pc, tabelaPaginas, null);
         }
 
-
-        //  Onde programa é executado - recebe programa a ser rodado
+        // Onde programa é executado - recebe programa a ser rodado
         public void setContext(int _pc, ArrayList<Integer> tabelaPaginas, int[] regs) {
             pc = _pc;
             tabelaPaginasProcessoAtual = tabelaPaginas;
@@ -317,7 +317,7 @@ public class Sistema extends Thread{
                     // local de accesso a memoria - FETCH
 
                     // T1-A Implementando a tradução no Fetch da memoria
-                    int enderecoFisico = traduzEndereco(pc); ///  Usar o de memória páginado para pega endereço correto
+                    int enderecoFisico = traduzEndereco(pc); /// Usar o de memória páginado para pega endereço correto
                     instructionRegister = memoriaFisica[enderecoFisico]; /// Recupera do array de memória paginado
 
                     // guarda em ir
@@ -530,29 +530,29 @@ public class Sistema extends Thread{
                             stopPorStop = true;
                             cpuStop = true;
                             break;
-                        
-                        case ADDIO: // Opcode para esperar entrada e saida
-                                
-                            //Colocar na fila de bloqueado - tirando da fila de prontos e tirando da CPU
-                                // Salvar contexto atual
-                                // Mandar thread que verifica se há valor no arquivo
-                            //Mandar escalonador seguir adiante
 
-                        
+                        case ADDIO: // Opcode para esperar entrada e saida
+
+                            // Colocar na fila de bloqueado - tirando da fila de prontos e tirando da CPU
+                            // Salvar contexto atual
+                            // Mandar thread que verifica se há valor no arquivo
+                            // Mandar escalonador seguir adiante
 
                             // Pega o endereço que queremos guardar o valor
-                            int parametro = registradores[instructionRegister.parametro];
-                            if(parametro == 1){
+                            int parametro = instructionRegister.parametro;
+                            if (parametro == 1) {
                                 int primeiroValorSoma = gp.funcaoQueBloqueiaProcessoEEsperaIO(idPC);
-                                registradores[instructionRegister.registradorA] = registradores[instructionRegister.registradorA] + primeiroValorSoma;
+                                registradores[instructionRegister.registradorA] = registradores[instructionRegister.registradorA]
+                                        + primeiroValorSoma;
 
-                            }else{
+                            } else {
                                 // escreve valor
                             }
-                            
-                            pc++;
 
-                        // Inexistente
+                            pc++;
+                            break;
+
+                            // Inexistente
                         default:
                             interrupcoes = Interrupts.intInstrucaoInvalida;
                             break;
@@ -603,7 +603,7 @@ public class Sistema extends Thread{
             if (gp != null && sistemaAtual.sistemaOperacional.running != null) {
                 int id = sistemaAtual.sistemaOperacional.running.id;
                 gp.desaloca(id);
-    }
+            }
         }
     }
 
@@ -686,22 +686,25 @@ public class Sistema extends Thread{
                 dump(memoria[i]);
             }
         }
-        // Supondo que não chamado ninguem
-        // public void execProcesso(Word[] programa, ArrayList<Integer> tabelaPaginas, int pcInicial) {
-        //     System.out.println("---------------------------------- programa carregado na memoria");
-        //     hardWare.cpu.setContext(pcInicial, tabelaPaginas);
-        //     System.out.println("---------------------------------- inicia execucao");
-        //     hardWare.cpu.run();
-        //     System.out.println("---------------------------------- memoria apos execucao");
+        // Supondo que não chamado por ninguem
+        // public void execProcesso(Word[] programa, ArrayList<Integer> tabelaPaginas,
+        // int pcInicial) {
+        // System.out.println("---------------------------------- programa carregado na
+        // memoria");
+        // hardWare.cpu.setContext(pcInicial, tabelaPaginas);
+        // System.out.println("---------------------------------- inicia execucao");
+        // hardWare.cpu.run();
+        // System.out.println("---------------------------------- memoria apos
+        // execucao");
 
-        //     for (int i = 0; i < programa.length; i++) {
-        //         int pagina = i / tamPg;
-        //         int offset = i % tamPg;
-        //         int frame = tabelaPaginas.get(pagina);
-        //         int enderecoFisico = frame * tamPg + offset;
-        //         System.out.print(enderecoFisico + ":  ");
-        //         dump(hardWare.memoria.posicao[enderecoFisico]);
-        //     }
+        // for (int i = 0; i < programa.length; i++) {
+        // int pagina = i / tamPg;
+        // int offset = i % tamPg;
+        // int frame = tabelaPaginas.get(pagina);
+        // int enderecoFisico = frame * tamPg + offset;
+        // System.out.print(enderecoFisico + ": ");
+        // dump(hardWare.memoria.posicao[enderecoFisico]);
+        // }
         // }
     }
 
@@ -741,8 +744,9 @@ public class Sistema extends Thread{
         Sistema.tamMem = tamMem;
         tamPg = tamPag;
 
-        /// T1-A Cálculo do número de frames da memória, caso seja valor quebrado, arredonda para cima
-        numFrames =  Math.ceil((double) tamMem / tamPg);
+        /// T1-A Cálculo do número de frames da memória, caso seja valor quebrado,
+        /// arredonda para cima
+        numFrames = Math.ceil((double) tamMem / tamPg);
 
         hardWare = new HardWare(tamMem); // memoria do HW tem tamMem palavras
         sistemaOperacional = new SistemaOperacional(hardWare);
@@ -774,7 +778,7 @@ public class Sistema extends Thread{
         }
 
         threadEscalonador = new Thread(() -> {
-            //sout somente para debug
+            // sout somente para debug
             System.out.println("[Thread Escalonador iniciada: \" + Thread.currentThread().getName() + \"]");
             while (sistemaAtual != null && sistemaAtual.sistemaOperacional.escalonadorAtivo) {
                 gp.passoEscalonadorContinuo();
@@ -825,7 +829,7 @@ public class Sistema extends Thread{
 
         public Program[] progs = {
                 new Program("fatorial",
-                        new Word[]{
+                        new Word[] {
                                 // este fatorial so aceita valores positivos. nao pode ser zero
                                 // linha coment
                                 new Word(Opcode.LDI, 0, -1, 7), // 0 r0 é valor a calcular fatorial
@@ -843,7 +847,7 @@ public class Sistema extends Thread{
                         }),
 
                 new Program("fatorialV2",
-                        new Word[]{
+                        new Word[] {
                                 new Word(Opcode.LDI, 0, -1, 5), // numero para colocar na memoria, ou pode ser lido
                                 new Word(Opcode.STD, 0, -1, 19),
                                 new Word(Opcode.LDD, 0, -1, 19),
@@ -863,11 +867,11 @@ public class Sistema extends Thread{
                                 new Word(Opcode.SYSCALL, -1, -1, -1),
                                 new Word(Opcode.STOP, -1, -1, -1), // POS 17
                                 new Word(Opcode.DATA, -1, -1, -1), // POS 18
-                                new Word(Opcode.DATA, -1, -1, -1)} // POS 19
+                                new Word(Opcode.DATA, -1, -1, -1) } // POS 19
                 ),
 
                 new Program("progMinimo",
-                        new Word[]{
+                        new Word[] {
                                 new Word(Opcode.LDI, 0, -1, 999),
                                 new Word(Opcode.STD, 0, -1, 8),
                                 new Word(Opcode.STD, 0, -1, 9),
@@ -885,7 +889,7 @@ public class Sistema extends Thread{
                         }),
 
                 new Program("fibonacci10",
-                        new Word[]{ // mesmo que prog exemplo, so que usa r0 no lugar de r8
+                        new Word[] { // mesmo que prog exemplo, so que usa r0 no lugar de r8
                                 new Word(Opcode.LDI, 1, -1, 0),
                                 new Word(Opcode.STD, 1, -1, 20),
                                 new Word(Opcode.LDI, 2, -1, 1),
@@ -919,7 +923,7 @@ public class Sistema extends Thread{
                         }),
 
                 new Program("fibonacci10v2",
-                        new Word[]{ // mesmo que prog exemplo, so que usa r0 no lugar de r8
+                        new Word[] { // mesmo que prog exemplo, so que usa r0 no lugar de r8
                                 new Word(Opcode.LDI, 1, -1, 0),
                                 new Word(Opcode.STD, 1, -1, 20),
                                 new Word(Opcode.LDI, 2, -1, 1),
@@ -954,7 +958,7 @@ public class Sistema extends Thread{
                                 new Word(Opcode.DATA, -1, -1, -1) // ate aqui - serie de fibonacci ficara armazenada
                         }),
                 new Program("fibonacciREAD",
-                        new Word[]{
+                        new Word[] {
                                 // mesmo que prog exemplo, so que usa r0 no lugar de r8
                                 new Word(Opcode.LDI, 8, -1, 1), // leitura
                                 new Word(Opcode.LDI, 9, -1, 55), // endereco a guardar o tamanho da serie de fib a gerar
@@ -1017,7 +1021,7 @@ public class Sistema extends Thread{
                                 new Word(Opcode.DATA, -1, -1, -1)
                         }),
                 new Program("PB",
-                        new Word[]{
+                        new Word[] {
                                 // dado um inteiro em alguma posição de memória,
                                 // se for negativo armazena -1 na saída; se for positivo responde o fatorial do
                                 // número na saída
@@ -1039,7 +1043,7 @@ public class Sistema extends Thread{
                                 new Word(Opcode.DATA, -1, -1, -1) // POS 15
                         }),
                 new Program("PC",
-                        new Word[]{
+                        new Word[] {
                                 // Para um N definido (10 por exemplo)
                                 // o programa ordena um vetor de N números em alguma posição de memória;
                                 // ordena usando bubble sort
@@ -1102,23 +1106,33 @@ public class Sistema extends Thread{
                                 new Word(Opcode.DATA, -1, -1, -1),
                                 new Word(Opcode.DATA, -1, -1, -1),
                                 new Word(Opcode.DATA, -1, -1, -1)
+                        }),
+
+                new Program("soma",
+                        new Word[] {
+                                // Simboliza uma soma com dois valores vindo do teclado
+                                // Espera entrada do usuário (bloqueia processo)
+                                // Aloca para a memória os valores fornecidos
+                                // Realiza a soma desejada
+                                new Word(Opcode.ADDIO, 8, -1, 1), // Espera primeira leitura
+                                new Word(Opcode.LDI, 9, -1, 20), // Endereco para primeiro valor
+                                new Word(Opcode.SYSCALL, -1, -1, -1),
+                                new Word(Opcode.ADDIO, 8, -1, 1), // Espera segunda leitura
+                                new Word(Opcode.LDI, 9, -1, 21), // Endereco para segundo valor
+                                new Word(Opcode.SYSCALL, -1, -1, -1),
+                                new Word(Opcode.LDD, 0, -1, 20), // Carrega valor em r0
+                                new Word(Opcode.LDD, 1, -1, 21), // Carrega valor em r1
+                                new Word(Opcode.ADD, 0, 1, -1), // Realizada a soma r0 + r1
+                                new Word(Opcode.STD, 0, -1, 22), // Guarda resultado em memoria
+                                new Word(Opcode.LDI, 8, -1, 2), // escrita
+                                new Word(Opcode.LDI, 9, -1, 22), // endereco do resultado
+                                new Word(Opcode.SYSCALL, -1, -1, -1),
+                                new Word(Opcode.STOP, -1, -1, -1),
+                                new Word(Opcode.DATA, -1, -1, -1), // pos 20
+                                new Word(Opcode.DATA, -1, -1, -1), // pos 21
+                                new Word(Opcode.DATA, -1, -1, -1) // pos 22
                         })
+
         };
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

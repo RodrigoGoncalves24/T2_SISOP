@@ -16,6 +16,8 @@ public class GerenciadorProcessos extends Thread {
     private final GerenteMemoria gm = new GerenteMemoria();
     private final Sistema sistema;
 
+    private final VerificaIO verificaIO = new VerificaIO();
+
     public GerenciadorProcessos(int tamMemoria, int tamPg, Sistema sistema) {
         this.sistema = sistema;
         this.filaProntos = sistema.sistemaOperacional.ready;
@@ -210,20 +212,24 @@ public class GerenciadorProcessos extends Thread {
     // Função que bloqueia o processo e aguarda IO dele  
     public int funcaoQueBloqueiaProcessoEEsperaIO(int idProcesso){
         
-        // Remove da fila de pronto
-        filaProntos.remove(idProcesso);
+        // Já removido antermente
+        //filaProntos.remove(idProcesso);
 
 
         // Salva contexto
-        int [] registradoresSalvos = processoRodando.registradores;
-        int salvaPc = processoRodando.pc;
-        ArrayList<Integer> tabelaPaginasSalva = processoRodando.tabelaPaginas;
+//        int [] registradoresSalvos = processoRodando.registradores;
+//        int salvaPc = processoRodando.pc;
+//        ArrayList<Integer> tabelaPaginasSalva = processoRodando.tabelaPaginas;
         
         // Adiciona na fila de bloqueados
-        filaBloqueados.add(processoRodando);
+       filaBloqueados.add(processoRodando);
 
+    
         // Mandar a thread que verifica constantemente se há leitura  
-        return  0;
+        int valorLido = verificaIO.esperaEntradaESaida();
+
+        // Ao retornar, precisa gerar exceção para a CPU e colocar o processo para pronto
+        return  valorLido;
     }
 
 }
