@@ -109,8 +109,9 @@ public class Sistema extends Thread {
                         break;
 
                     case "execall":
-                        ExecutaTudoEscalonador executador = new ExecutaTudoEscalonador(gp);
-                        executador.start(); // roda em Thread separada
+                        // Apenas libera os PCBs. A unica thread do escalonador
+                        // continua responsavel por alternar as fatias entre eles.
+                        gp.executaTodosEscalonados();
                         break;
 
                     case "traceon":
@@ -214,6 +215,8 @@ public class Sistema extends Thread {
         private int limiteInstrucoes; // quantum para escalonamento
         private int instrucoesExecutadas;
         private boolean stopPorStop;
+        // Diferencia o fim normal da fatia de uma parada causada por ADDIO.
+        private boolean stopPorIO;
 
         // auxilio aa depuração
         private boolean debug; // se true entao mostra cada instrucao em execucao
@@ -294,6 +297,10 @@ public class Sistema extends Thread {
             return stopPorStop;
         }
 
+        public boolean parouPorIO() {
+            return stopPorIO;
+        }
+
         public void setDebug(boolean debug) {
             this.debug = debug;
         }
@@ -309,6 +316,7 @@ public class Sistema extends Thread {
             cpuStop = false;
             instrucoesExecutadas = 0;
             stopPorStop = false;
+            stopPorIO = false;
             while (!cpuStop) { // ciclo de instrucoes. acaba cfe resultado da exec da instrucao, veja cada
 
                 // FASE DE FETCH
@@ -372,7 +380,14 @@ public class Sistema extends Thread {
                                 pc++;
                                 if (debug) {
                                     System.out.print("                                  ");
-                                    dump.dump(instructionRegister.parametro, instructionRegister.parametro + 1);
+                                    /*
+                                     * instructionRegister.parametro e um endereco LOGICO.
+                                     * A escrita acima ocorreu em endFisico, depois da traducao
+                                     * pela tabela de paginas do processo atual. O trace deve
+                                     * mostrar essa mesma posicao fisica; usar o endereco logico
+                                     * fazia dois processos parecerem compartilhar o dado.
+                                     */
+                                    dump.dump(endFisico, endFisico + 1);
                                 }
                             }
                             break;
@@ -531,25 +546,16 @@ public class Sistema extends Thread {
                             cpuStop = true;
                             break;
 
-                        case ADDIO: // Opcode para esperar entrada e saida
-
-                            // Colocar na fila de bloqueado - tirando da fila de prontos e tirando da CPU
-                            // Salvar contexto atual
-                            // Mandar thread que verifica se há valor no arquivo
-                            // Mandar escalonador seguir adiante
-
-                            // Pega o endereço que queremos guardar o valor
-                            int parametro = instructionRegister.parametro;
-                            if (parametro == 1) {
-                                int primeiroValorSoma = gp.funcaoQueBloqueiaProcessoEEsperaIO(idPC);
-                                registradores[instructionRegister.registradorA] = registradores[instructionRegister.registradorA]
-                                        + primeiroValorSoma;
-
-                            } else {
-                                // escreve valor
-                            }
-
+                        case ADDIO:
+                            /*
+                             * ADDIO inicia uma operacao, mas nao espera o dispositivo aqui.
+                             * O endereco de destino ja deve estar em r9. Avancamos o PC para
+                             * que a retomada ocorra depois do ADDIO e encerramos imediatamente
+                             * a fatia. GerenciadorProcessos salvara o contexto e bloqueara o PCB.
+                             */
                             pc++;
+                            stopPorIO = true;
+                            cpuStop = true;
                             break;
 
                             // Inexistente
@@ -630,8 +636,23 @@ public class Sistema extends Thread {
                 // leitura
 
             } else if (hardWare.cpu.registradores[8] == 2) {
-                // escrita - escreve o conteuodo da memoria na posicao dada em registradores[9]
-                System.out.println("OUT:   " + hardWare.memoria.posicao[hardWare.cpu.registradores[9]].parametro);
+                // r9 tambem e endereco LOGICO na saida; por isso precisa de traducao.
+                int enderecoFisico = hardWare.cpu.traduzEndereco(hardWare.cpu.registradores[9]);
+                if (enderecoFisico < 0 || enderecoFisico >= hardWare.memoria.posicao.length) {
+                    System.out.println("Endereco de saida invalido.");
+                    return;
+                }
+
+                int resultado = hardWare.memoria.posicao[enderecoFisico].parametro;
+                ProcessControlBlock atual = sistemaOperacional.running;
+                if (atual != null && "soma".equalsIgnoreCase(atual.nomePrograma)) {
+                    // O programa soma conserva os operandos em r0 e r1 para uma
+                    // saida didatica, alem de armazenar o resultado na memoria.
+                    System.out.println("Soma de " + hardWare.cpu.registradores[0] + " + "
+                            + hardWare.cpu.registradores[1] + " = " + resultado);
+                } else {
+                    System.out.println("OUT:   " + resultado);
+                }
             } else {
                 System.out.println("  PARAMETRO INVALIDO");
             }
@@ -778,18 +799,12 @@ public class Sistema extends Thread {
         }
 
         threadEscalonador = new Thread(() -> {
-            // sout somente para debug
-            System.out.println("[Thread Escalonador iniciada: \" + Thread.currentThread().getName() + \"]");
+            System.out.println("[Thread Escalonador iniciada: "
+                    + Thread.currentThread().getName() + "]");
             while (sistemaAtual != null && sistemaAtual.sistemaOperacional.escalonadorAtivo) {
                 gp.passoEscalonadorContinuo();
-                try {
-                    Thread.sleep(2000);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
             }
-        });
+        }, "Escalonador");
         threadEscalonador.setDaemon(true);
         threadEscalonador.start();
     }
@@ -800,6 +815,9 @@ public class Sistema extends Thread {
         }
         if (threadEscalonador != null) {
             threadEscalonador.interrupt();
+        }
+        if (gp != null) {
+            gp.encerrarIO();
         }
     }
 
@@ -1110,27 +1128,33 @@ public class Sistema extends Thread {
 
                 new Program("soma",
                         new Word[] {
-                                // Simboliza uma soma com dois valores vindo do teclado
-                                // Espera entrada do usuário (bloqueia processo)
-                                // Aloca para a memória os valores fornecidos
-                                // Realiza a soma desejada
-                                new Word(Opcode.ADDIO, 8, -1, 1), // Espera primeira leitura
-                                new Word(Opcode.LDI, 9, -1, 20), // Endereco para primeiro valor
-                                new Word(Opcode.SYSCALL, -1, -1, -1),
-                                new Word(Opcode.ADDIO, 8, -1, 1), // Espera segunda leitura
-                                new Word(Opcode.LDI, 9, -1, 21), // Endereco para segundo valor
-                                new Word(Opcode.SYSCALL, -1, -1, -1),
+                                // Cada ADDIO usa r9 como endereco de destino e bloqueia o PCB.
+                                // Nao ha SYSCALL de leitura: o driver conclui a operacao de
+                                // forma assincrona e grava diretamente na memoria do processo.
+                                new Word(Opcode.LDI, 9, -1, 20), // destino do primeiro valor
+                                new Word(Opcode.ADDIO, -1, -1, 1),
+                                new Word(Opcode.LDI, 9, -1, 21), // destino do segundo valor
+                                new Word(Opcode.ADDIO, -1, -1, 1),
                                 new Word(Opcode.LDD, 0, -1, 20), // Carrega valor em r0
                                 new Word(Opcode.LDD, 1, -1, 21), // Carrega valor em r1
-                                new Word(Opcode.ADD, 0, 1, -1), // Realizada a soma r0 + r1
-                                new Word(Opcode.STD, 0, -1, 22), // Guarda resultado em memoria
+                                new Word(Opcode.MOVE, 2, 0, -1), // preserva o primeiro operando
+                                new Word(Opcode.ADD, 2, 1, -1), // r2 = r0 + r1
+                                new Word(Opcode.STD, 2, -1, 22), // Guarda resultado em memoria
                                 new Word(Opcode.LDI, 8, -1, 2), // escrita
                                 new Word(Opcode.LDI, 9, -1, 22), // endereco do resultado
                                 new Word(Opcode.SYSCALL, -1, -1, -1),
                                 new Word(Opcode.STOP, -1, -1, -1),
-                                new Word(Opcode.DATA, -1, -1, -1), // pos 20
-                                new Word(Opcode.DATA, -1, -1, -1), // pos 21
-                                new Word(Opcode.DATA, -1, -1, -1) // pos 22
+                                // Reserva explicita ate os enderecos logicos 20, 21 e 22.
+                                new Word(Opcode.DATA, -1, -1, -1), // 13
+                                new Word(Opcode.DATA, -1, -1, -1), // 14
+                                new Word(Opcode.DATA, -1, -1, -1), // 15
+                                new Word(Opcode.DATA, -1, -1, -1), // 16
+                                new Word(Opcode.DATA, -1, -1, -1), // 17
+                                new Word(Opcode.DATA, -1, -1, -1), // 18
+                                new Word(Opcode.DATA, -1, -1, -1), // 19
+                                new Word(Opcode.DATA, -1, -1, -1), // 20: primeiro valor
+                                new Word(Opcode.DATA, -1, -1, -1), // 21: segundo valor
+                                new Word(Opcode.DATA, -1, -1, -1)  // 22: resultado
                         })
 
         };
