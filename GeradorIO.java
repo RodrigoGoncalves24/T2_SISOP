@@ -10,7 +10,6 @@ import java.util.Random;
  * nenhum evento e sobrescrito e um mesmo numero nunca pode ser lido duas vezes.
  */
 public class GeradorIO extends Thread {
-    private static final long INTERVALO_GERACAO_MS = 5_000L;
 
     private final Random random = new Random();
     private final Object monitor = new Object();
@@ -29,9 +28,9 @@ public class GeradorIO extends Thread {
     public void run() {
         while (executando && !isInterrupted()) {
             try {
-                Thread.sleep(INTERVALO_GERACAO_MS);
+                Thread.sleep(20000);
 
-                int novoValor = random.nextInt(101); // intervalo inclusivo: 0..100
+                int novoValor = random.nextInt(0,100); // intervalo de valores gerados
                 synchronized (monitor) {
                     // Buffer de uma posicao: evita substituir uma entrada ainda nao lida.
                     while (valorDisponivel && executando) {

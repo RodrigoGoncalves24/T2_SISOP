@@ -803,6 +803,14 @@ public class Sistema extends Thread {
                     + Thread.currentThread().getName() + "]");
             while (sistemaAtual != null && sistemaAtual.sistemaOperacional.escalonadorAtivo) {
                 gp.passoEscalonadorContinuo();
+
+                // Deixar a thread dormir antes de
+                try {
+                    Thread.sleep(2000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
             }
         }, "Escalonador");
         threadEscalonador.setDaemon(true);

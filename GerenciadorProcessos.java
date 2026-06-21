@@ -10,6 +10,7 @@ public class GerenciadorProcessos extends Thread {
     private int proximoId = 1;
     private final List<ProcessControlBlock> filaProntos;
     private final List<ProcessControlBlock> filaBloqueados;
+    private final List<ProcessControlBlock> filaFinalizados;
     private ProcessControlBlock processoRodando;
     private final Object lock = new Object();
 
@@ -34,6 +35,7 @@ public class GerenciadorProcessos extends Thread {
         this.sistema = sistema;
         this.filaProntos = sistema.sistemaOperacional.ready;
         this.filaBloqueados = sistema.sistemaOperacional.block;
+        this.filaFinalizados = sistema.sistemaOperacional.ready;
 
         int numFrames = (int) Math.ceil((double) tamMemoria / tamPg);
         GerenteMemoria.defineValores(numFrames, tamPg);
@@ -59,12 +61,14 @@ public class GerenciadorProcessos extends Thread {
         sistema.sistemaOperacional.utils.loadProgramPaged(programa, paginasAlocadas);
 
         synchronized (lock) {
-            ProcessControlBlock pcb = new ProcessControlBlock(proximoId, nomePrograma, programa, paginasAlocadas, "PRONTO");
+            ProcessControlBlock pcb = new ProcessControlBlock(proximoId, nomePrograma, programa, paginasAlocadas,
+                    "PRONTO");
             listaProcessBlock.put(proximoId, pcb);
             filaProntos.add(pcb);
             System.out.println("Processo criado: " + pcb.id + " (" + nomePrograma + ")");
             proximoId++;
         }
+        listaTudoProcessos();
         return true;
     }
 
@@ -86,10 +90,15 @@ public class GerenciadorProcessos extends Thread {
             }
 
             listaProcessBlock.remove(id);
+            pcb.estado = "FINALZIADO";
+            filaFinalizados.add(pcb);
             processosAutorizados.remove(id);
+
             lock.notifyAll();
-            System.out.println("Processo removido: " + pcb.id);
+            System.out.println("Processo finalizado: " + pcb.id);
+            listaTudoProcessos();
         }
+
     }
 
     public void listarProcessos() {
@@ -104,11 +113,59 @@ public class GerenciadorProcessos extends Thread {
                 String fila = (processoRodando != null && processoRodando.id == pcb.id)
                         ? "RUNNING"
                         : (filaProntos.contains(pcb) ? "READY"
-                        : (filaBloqueados.contains(pcb) ? "BLOCKED" : "OUTRA"));
-                System.out.println("ID: " + pcb.id + " Programa: " + pcb.nomePrograma + " Estado: " + pcb.estado + " Fila: " + fila + " Paginas: " + pcb.tabelaPaginas);
-                System.out.println("    PC: " + pcb.pc );
+                                : (filaBloqueados.contains(pcb) ? "BLOCKED" : "OUTRA"));
+                System.out.println("ID: " + pcb.id + " Programa: " + pcb.nomePrograma + " Estado: " + pcb.estado
+                        + " Fila: " + fila + " Paginas: " + pcb.tabelaPaginas + " PC: " + pcb.pc);
             }
         }
+    }
+
+    public void listaTudoProcessos() {
+        synchronized (lock) {
+            if (listaProcessBlock.isEmpty()) {
+                System.out.println("Sem processos no sistema.");
+                return;
+            }
+
+            System.out.println("\nPROCESSOS GERAIS:");
+            for (Map.Entry<Integer, ProcessControlBlock> entry : listaProcessBlock.entrySet()) {
+                ProcessControlBlock pcb = entry.getValue();
+                String fila = (processoRodando != null && processoRodando.id == pcb.id)
+                        ? "RUNNING"
+                        : (filaProntos.contains(pcb) ? "READY"
+                                : (filaBloqueados.contains(pcb) ? "BLOCKED" : "OUTRA"));
+                System.out.println("\nID: " + pcb.id + " Programa: " + pcb.nomePrograma + " Estado: " + pcb.estado
+                        + " Fila: " + fila + " Paginas: " + pcb.tabelaPaginas + " PC: " + pcb.pc);
+
+                int totalPalavras = pcb.imagemPrograma.length;
+                for (int i = 0; i < totalPalavras; i++) {
+                    int pagina = i / Sistema.tamPg;
+                    int offset = i % Sistema.tamPg;
+                    int frame = pcb.tabelaPaginas.get(pagina);
+                    int enderecoFisico = frame * Sistema.tamPg + offset;
+                    System.out.print(enderecoFisico + ":  ");
+                    sistema.sistemaOperacional.utils.dump(sistema.hardWare.memoria.posicao[enderecoFisico]);
+                }
+            }
+
+            if (!filaFinalizados.isEmpty()) {
+                for (ProcessControlBlock pcb : filaFinalizados) {
+                    System.out.println("\nID: " + pcb.id + " Programa: " + pcb.nomePrograma + " Estado: " + pcb.estado
+                            + " Fila: FINALIZADO" + " Paginas: " + pcb.tabelaPaginas + " PC: " + pcb.pc);
+
+                    int totalPalavras = pcb.imagemPrograma.length;
+                    for (int i = 0; i < totalPalavras; i++) {
+                        int pagina = i / Sistema.tamPg;
+                        int offset = i % Sistema.tamPg;
+                        int frame = pcb.tabelaPaginas.get(pagina);
+                        int enderecoFisico = frame * Sistema.tamPg + offset;
+                        System.out.print(enderecoFisico + ":  ");
+                        sistema.sistemaOperacional.utils.dump(sistema.hardWare.memoria.posicao[enderecoFisico]);
+                    }
+                }
+            }
+        }
+
     }
 
     public void dumpProcesso(int id) {
@@ -122,7 +179,8 @@ public class GerenciadorProcessos extends Thread {
             return;
         }
 
-        System.out.println("PCB => id=" + pcb.id + ", programa=" + pcb.nomePrograma + ", estado=" + pcb.estado + ", pc=" + pcb.pc + ", tabelaPaginas=" + pcb.tabelaPaginas);
+        System.out.println("PCB => id=" + pcb.id + ", programa=" + pcb.nomePrograma + ", estado=" + pcb.estado + ", pc="
+                + pcb.pc + ", tabelaPaginas=" + pcb.tabelaPaginas);
 
         int totalPalavras = pcb.imagemPrograma.length;
         for (int i = 0; i < totalPalavras; i++) {
@@ -182,29 +240,17 @@ public class GerenciadorProcessos extends Thread {
         return null;
     }
 
-    /**
-     * Executa uma fatia ou dorme ate existir trabalho autorizado. O wait elimina
-     * tanto a execucao automatica apos "new" quanto o polling periodico da fila.
-     */
+    // Executar um processo
     public void passoEscalonadorContinuo() {
         ProcessControlBlock pcb;
         synchronized (lock) {
-            pcb = proximoProcessoAutorizado();
-            while (sistema.sistemaOperacional.escalonadorAtivo
-                    && (processoRodando != null || pcb == null)) {
-                try {
-                    lock.wait();
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    return;
-                }
-                pcb = proximoProcessoAutorizado();
-            }
-
-            if (!sistema.sistemaOperacional.escalonadorAtivo || pcb == null) {
+            if (!sistema.sistemaOperacional.escalonadorAtivo) {
                 return;
             }
-            filaProntos.remove(pcb);
+            if (processoRodando != null || filaProntos.isEmpty()) {
+                return;
+            }
+            pcb = filaProntos.remove(0);
         }
 
         executaFatia(pcb);
@@ -224,27 +270,33 @@ public class GerenciadorProcessos extends Thread {
         sistema.hardWare.cpu.run(sistema.sistemaOperacional.delta, pcb.id);
 
         synchronized (lock) {
-            //Verifica se o processo ainda existe, pois pode ter sido removido por interrupção
+            // Verifica se o processo ainda existe, pois pode ter sido removido por
+            // interrupção
             if (!listaProcessBlock.containsKey(pcb.id)) {
                 processoRodando = null;
                 sistema.sistemaOperacional.running = null;
                 return;
             }
-            
+
             pcb.pc = sistema.hardWare.cpu.getPc();
             pcb.registradores = sistema.hardWare.cpu.getRegistradoresSnapshot();
 
             if (sistema.hardWare.cpu.parouPorStop()) {
+                filaFinalizados.add(pcb);
+
                 gm.desaloca(pcb.tabelaPaginas);
                 listaProcessBlock.remove(pcb.id);
                 processosAutorizados.remove(pcb.id);
+
                 System.out.println("Processo finalizado e removido: " + pcb.id);
+                listaTudoProcessos();
             } else if (sistema.hardWare.cpu.parouPorIO()) {
                 // O ADDIO ja avancou o PC. O contexto salvo retomara exatamente na
                 // instrucao seguinte quando o dispositivo concluir a operacao.
                 pcb.estado = "BLOQUEADO";
                 filaBloqueados.add(pcb);
                 System.out.println("Processo " + pcb.id + " bloqueado aguardando IO.");
+                listaTudoProcessos();
             } else {
                 pcb.estado = "PRONTO";
                 filaProntos.add(pcb);
@@ -304,6 +356,7 @@ public class GerenciadorProcessos extends Thread {
             System.out.println("[IO] Valor gerado " + valor + " gravado no endereco logico "
                     + enderecoLogico + " do processo " + pcb.id + ". Processo voltou para READY.");
             lock.notifyAll(); // acorda o escalonador para retomar o processo
+            listaTudoProcessos();
         }
     }
 
